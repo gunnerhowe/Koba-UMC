@@ -1,6 +1,9 @@
 """Tests for UMC encoder modules."""
 
 import pytest
+
+pytest.importorskip("torch")
+
 import torch
 import numpy as np
 

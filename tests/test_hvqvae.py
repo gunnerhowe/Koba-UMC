@@ -1,6 +1,10 @@
 """Tests for Hierarchical VQ-VAE components."""
 
 import pytest
+
+pytest.importorskip("torch")
+pytest.importorskip("vector_quantize_pytorch")
+
 import torch
 import torch.nn as nn
 

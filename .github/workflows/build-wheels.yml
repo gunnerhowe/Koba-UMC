@@ -1,4 +1,4 @@
-name: Build wheels
+name: Build & Publish
 
 on:
   push:
@@ -14,116 +14,14 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Build platform wheels with cibuildwheel
+  # Build sdist + pure Python wheel
   # ---------------------------------------------------------------------------
-  build-wheels:
-    name: Wheels — ${{ matrix.os }} ${{ matrix.arch }}
-    runs-on: ${{ matrix.runs-on }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Linux x86_64
-          - os: linux
-            arch: x86_64
-            runs-on: ubuntu-latest
-          # Linux aarch64
-          - os: linux
-            arch: aarch64
-            runs-on: ubuntu-latest
-          # macOS x86_64
-          - os: macos
-            arch: x86_64
-            runs-on: macos-13
-          # macOS arm64
-          - os: macos
-            arch: arm64
-            runs-on: macos-14
-          # Windows x86_64
-          - os: windows
-            arch: AMD64
-            runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      # QEMU is needed for Linux aarch64 cross-compilation
-      - name: Set up QEMU
-        if: matrix.os == 'linux' && matrix.arch == 'aarch64'
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install cibuildwheel
-        run: pip install cibuildwheel==2.21.3
-
-      - name: Build wheels
-        run: cibuildwheel --output-dir wheelhouse
-        env:
-          # ---------------------------------------------------------------
-          # Target Python versions
-          # ---------------------------------------------------------------
-          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
-
-          # ---------------------------------------------------------------
-          # Platform / arch selection
-          # ---------------------------------------------------------------
-          CIBW_ARCHS_LINUX: ${{ matrix.arch }}
-          CIBW_ARCHS_MACOS: ${{ matrix.arch }}
-          CIBW_ARCHS_WINDOWS: ${{ matrix.arch }}
-
-          # ---------------------------------------------------------------
-          # Skip musl-linux and PyPy builds
-          # ---------------------------------------------------------------
-          CIBW_SKIP: "*-musllinux_* pp*"
-
-          # ---------------------------------------------------------------
-          # Install a C compiler inside the manylinux container
-          # (gcc is usually present, but be explicit)
-          # ---------------------------------------------------------------
-          CIBW_BEFORE_ALL_LINUX: "yum install -y gcc || apt-get update && apt-get install -y gcc || true"
-
-          # ---------------------------------------------------------------
-          # The C extension is compiled by setup.py's custom build_py
-          # command, which invokes `python -m umc.cext.build`.
-          # numpy must be available since umc/__init__.py imports it.
-          # ---------------------------------------------------------------
-          CIBW_BEFORE_BUILD: "pip install numpy>=1.24.0"
-
-          # ---------------------------------------------------------------
-          # Quick smoke test: import the package and check the C extension
-          # ---------------------------------------------------------------
-          CIBW_TEST_REQUIRES: numpy
-          CIBW_TEST_COMMAND: >-
-            python -c "
-            import umc;
-            import numpy as np;
-            from umc.cext import HAS_C_EXT;
-            print(f'umc {umc.__version__}  C ext: {HAS_C_EXT}');
-            d = np.random.randn(10, 8, 3).astype(np.float32);
-            c = umc.compress(d);
-            r = umc.decompress(c);
-            assert np.array_equal(d, r), 'Round-trip failed!';
-            print('Round-trip OK');
-            "
-
-          # On Linux aarch64 under QEMU, tests are very slow — skip
-          CIBW_TEST_SKIP: "*-manylinux_aarch64"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-${{ matrix.os }}-${{ matrix.arch }}
-          path: ./wheelhouse/*.whl
-
+  # UMC's C extension uses ctypes (not a Python extension module), so the
+  # package is pure Python.  The C extension compiles at install time or
+  # on first `python -m umc.cext.build`.  No platform wheels needed.
   # ---------------------------------------------------------------------------
-  # Build source distribution
-  # ---------------------------------------------------------------------------
-  build-sdist:
-    name: Source distribution
+  build:
+    name: Build sdist & wheel
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -132,11 +30,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install build frontend
+      - name: Install build tools
         run: pip install build
 
-      - name: Build sdist
-        run: python -m build --sdist
+      - name: Build sdist and wheel
+        run: python -m build
 
       - name: Verify sdist contains C source
         run: |
@@ -148,17 +46,30 @@ jobs:
             echo "ERROR: kernels.c missing from sdist" && exit 1
           fi
 
+      - name: Smoke test wheel
+        run: |
+          pip install dist/*.whl
+          python -c "
+          import umc
+          import numpy as np
+          d = np.random.randn(10, 8, 3).astype(np.float32)
+          c = umc.compress(d)
+          r = umc.decompress(c)
+          assert np.array_equal(d, r), 'Round-trip failed!'
+          print(f'umc {umc.__version__} — wheel OK')
+          "
+
       - uses: actions/upload-artifact@v4
         with:
-          name: sdist
-          path: dist/*.tar.gz
+          name: dist
+          path: dist/
 
   # ---------------------------------------------------------------------------
   # Publish to PyPI on tag push (v*)
   # ---------------------------------------------------------------------------
   publish:
     name: Publish to PyPI
-    needs: [build-wheels, build-sdist]
+    needs: [build]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     environment:
@@ -170,8 +81,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          name: dist
           path: dist
-          merge-multiple: true
 
       - name: List artifacts
         run: ls -lh dist/
