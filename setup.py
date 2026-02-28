@@ -7,7 +7,6 @@ etc.) the build still succeeds — the pure-Python fallback handles everything.
 """
 
 import os
-import platform
 import subprocess
 import sys
 
@@ -60,17 +59,6 @@ class BuildPyWithCExt(build_py):
             print(f"UMC: C extension compilation error (non-fatal): {exc}")
 
 
-def _shared_lib_globs():
-    """Return glob patterns for the compiled shared library."""
-    system = platform.system()
-    if system == "Windows":
-        return ["*.dll"]
-    elif system == "Darwin":
-        return ["*.dylib", "*.so"]
-    else:
-        return ["*.so"]
-
-
 setup(
     cmdclass={
         "build_py": BuildPyWithCExt,
@@ -78,6 +66,7 @@ setup(
     package_data={
         # Include the C source so sdists can recompile, plus any
         # pre-compiled shared libraries that the build step produced.
-        "umc.cext": ["*.c", "*.h"] + _shared_lib_globs(),
+        # List all possible extensions — only the platform-appropriate one exists.
+        "umc.cext": ["*.c", "*.h", "*.so", "*.dylib", "*.dll"],
     },
 )

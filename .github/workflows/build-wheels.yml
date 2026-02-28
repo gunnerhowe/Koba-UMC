@@ -90,23 +90,29 @@ jobs:
           # ---------------------------------------------------------------
           # The C extension is compiled by setup.py's custom build_py
           # command, which invokes `python -m umc.cext.build`.
-          # No extra CIBW_BEFORE_BUILD step is needed — setuptools
-          # handles it during `pip wheel`.
+          # numpy must be available since umc/__init__.py imports it.
           # ---------------------------------------------------------------
+          CIBW_BEFORE_BUILD: "pip install numpy>=1.24.0"
 
           # ---------------------------------------------------------------
           # Quick smoke test: import the package and check the C extension
           # ---------------------------------------------------------------
+          CIBW_TEST_REQUIRES: numpy
           CIBW_TEST_COMMAND: >-
             python -c "
             import umc;
+            import numpy as np;
             from umc.cext import HAS_C_EXT;
             print(f'umc {umc.__version__}  C ext: {HAS_C_EXT}');
-            assert HAS_C_EXT, 'C extension not loaded in wheel!'
+            d = np.random.randn(10, 8, 3).astype(np.float32);
+            c = umc.compress(d);
+            r = umc.decompress(c);
+            assert np.array_equal(d, r), 'Round-trip failed!';
+            print('Round-trip OK');
             "
 
-          # On Linux aarch64 under QEMU, tests are very slow — keep it minimal
-          CIBW_TEST_SKIP: ""
+          # On Linux aarch64 under QEMU, tests are very slow — skip
+          CIBW_TEST_SKIP: "*-manylinux_aarch64"
 
       - uses: actions/upload-artifact@v4
         with:

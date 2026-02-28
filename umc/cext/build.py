@@ -75,7 +75,7 @@ def _try_gcc(src, output, system):
             continue
 
         try:
-            cmd = [cc, "-O3", "-march=native", "-shared"]
+            cmd = [cc, "-O2", "-shared"]
             if system != "Windows":
                 cmd.append("-fPIC")
             cmd += ["-o", output, src]
