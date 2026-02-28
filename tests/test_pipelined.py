@@ -6,6 +6,9 @@ encode path produces the same output as sequential encode.
 
 import numpy as np
 import pytest
+
+pytest.importorskip("torch")
+
 import torch
 
 from umc.codec.tiered import _compress_storage, _decompress_storage

@@ -12,6 +12,9 @@ Verifies:
 
 import numpy as np
 import pytest
+
+pytest.importorskip("torch")
+
 import torch
 
 from umc.codec.residual import ResidualCoder, byte_transpose

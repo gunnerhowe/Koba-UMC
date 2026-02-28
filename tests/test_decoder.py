@@ -1,6 +1,9 @@
 """Tests for UMC decoder modules."""
 
 import pytest
+
+pytest.importorskip("torch")
+
 import torch
 
 from umc.config import UMCConfig

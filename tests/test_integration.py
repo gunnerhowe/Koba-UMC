@@ -5,6 +5,10 @@ import tempfile
 
 import numpy as np
 import pytest
+
+pytest.importorskip("torch")
+pytest.importorskip("vector_quantize_pytorch")
+
 import torch
 from torch.utils.data import DataLoader
 
