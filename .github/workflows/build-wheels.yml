@@ -1,0 +1,174 @@
+name: Build wheels
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build platform wheels with cibuildwheel
+  # ---------------------------------------------------------------------------
+  build-wheels:
+    name: Wheels — ${{ matrix.os }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64
+          - os: linux
+            arch: x86_64
+            runs-on: ubuntu-latest
+          # Linux aarch64
+          - os: linux
+            arch: aarch64
+            runs-on: ubuntu-latest
+          # macOS x86_64
+          - os: macos
+            arch: x86_64
+            runs-on: macos-13
+          # macOS arm64
+          - os: macos
+            arch: arm64
+            runs-on: macos-14
+          # Windows x86_64
+          - os: windows
+            arch: AMD64
+            runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # QEMU is needed for Linux aarch64 cross-compilation
+      - name: Set up QEMU
+        if: matrix.os == 'linux' && matrix.arch == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install cibuildwheel
+        run: pip install cibuildwheel==2.21.3
+
+      - name: Build wheels
+        run: cibuildwheel --output-dir wheelhouse
+        env:
+          # ---------------------------------------------------------------
+          # Target Python versions
+          # ---------------------------------------------------------------
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
+
+          # ---------------------------------------------------------------
+          # Platform / arch selection
+          # ---------------------------------------------------------------
+          CIBW_ARCHS_LINUX: ${{ matrix.arch }}
+          CIBW_ARCHS_MACOS: ${{ matrix.arch }}
+          CIBW_ARCHS_WINDOWS: ${{ matrix.arch }}
+
+          # ---------------------------------------------------------------
+          # Skip musl-linux and PyPy builds
+          # ---------------------------------------------------------------
+          CIBW_SKIP: "*-musllinux_* pp*"
+
+          # ---------------------------------------------------------------
+          # Install a C compiler inside the manylinux container
+          # (gcc is usually present, but be explicit)
+          # ---------------------------------------------------------------
+          CIBW_BEFORE_ALL_LINUX: "yum install -y gcc || apt-get update && apt-get install -y gcc || true"
+
+          # ---------------------------------------------------------------
+          # The C extension is compiled by setup.py's custom build_py
+          # command, which invokes `python -m umc.cext.build`.
+          # No extra CIBW_BEFORE_BUILD step is needed — setuptools
+          # handles it during `pip wheel`.
+          # ---------------------------------------------------------------
+
+          # ---------------------------------------------------------------
+          # Quick smoke test: import the package and check the C extension
+          # ---------------------------------------------------------------
+          CIBW_TEST_COMMAND: >-
+            python -c "
+            import umc;
+            from umc.cext import HAS_C_EXT;
+            print(f'umc {umc.__version__}  C ext: {HAS_C_EXT}');
+            assert HAS_C_EXT, 'C extension not loaded in wheel!'
+            "
+
+          # On Linux aarch64 under QEMU, tests are very slow — keep it minimal
+          CIBW_TEST_SKIP: ""
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.arch }}
+          path: ./wheelhouse/*.whl
+
+  # ---------------------------------------------------------------------------
+  # Build source distribution
+  # ---------------------------------------------------------------------------
+  build-sdist:
+    name: Source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build frontend
+        run: pip install build
+
+      - name: Build sdist
+        run: python -m build --sdist
+
+      - name: Verify sdist contains C source
+        run: |
+          mkdir _verify && cd _verify
+          tar xzf ../dist/*.tar.gz
+          if find . -name "kernels.c" | grep -q .; then
+            echo "OK: kernels.c found in sdist"
+          else
+            echo "ERROR: kernels.c missing from sdist" && exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  # ---------------------------------------------------------------------------
+  # Publish to PyPI on tag push (v*)
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish to PyPI
+    needs: [build-wheels, build-sdist]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: pypi
+      url: https://pypi.org/p/umc
+    permissions:
+      id-token: write   # trusted publishing via OIDC
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lh dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -1,0 +1,46 @@
+# UMC Configuration: Financial Time Series v1
+# Used by: scripts/train.py --config configs/financial_v1.yaml
+
+data:
+  window_size: 64
+  features: [open, high, low, close, volume]
+  normalize: returns
+
+encoder:
+  type: vae
+  max_latent_dim: 128
+  min_latent_dim: 8
+  hidden: [256, 128, 64]
+  num_charts: 16
+
+decoder:
+  type: mlp
+  hidden: [64, 128, 256]
+  chart_embedding_dim: 8
+
+training:
+  batch_size: 256
+  learning_rate: 0.001
+  epochs: 200
+  beta_start: 0.0
+  beta_end: 1.0
+  beta_warmup_epochs: 20
+  sparsity_weight: 0.01
+  smoothness_weight: 0.001
+  early_stopping_patience: 20
+  checkpoint_dir: checkpoints/financial_v1
+
+storage:
+  coordinate_dtype: float16
+  mnf_version: 1
+
+symbols:
+  - SPY
+  - AAPL
+  - MSFT
+  - GOOGL
+  - AMZN
+  - BTC-USD
+  - ETH-USD
+  - GC=F
+  - CL=F

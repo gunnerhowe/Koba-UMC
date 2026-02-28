@@ -1,0 +1,99 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "umc"
+dynamic = ["version"]
+description = "Universal Manifold Codec — Structured data compression with built-in similarity search"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = ["compression", "time-series", "neural-compression", "similarity-search"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Archiving :: Compression",
+]
+# Core dependencies — only numpy needed for compress/decompress
+dependencies = [
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+# Full neural codec (similarity search, VQ encoding)
+neural = [
+    "torch>=2.1.0",
+    "faiss-cpu>=1.7.4",
+    "pandas>=2.0.0",
+    "scipy>=1.11.0",
+    "scikit-learn>=1.3.0",
+    "matplotlib>=3.7.0",
+    "tqdm>=4.65.0",
+]
+# Better compression backends
+compression = [
+    "zstandard>=0.21.0",
+]
+# Pandas/Arrow DataFrame integration
+dataframe = [
+    "pandas>=2.0.0",
+    "pyarrow>=14.0.0",
+]
+# File format support (images, audio, video)
+media = [
+    "Pillow>=10.0.0",
+    "scipy>=1.11.0",
+]
+# CLI with rich formatting
+cli = [
+    "rich>=13.0.0",
+]
+# Everything
+all = [
+    "umc[neural,compression,media,cli,dataframe]",
+    "yfinance>=0.2.30",
+]
+dev = [
+    "umc[all]",
+    "pytest>=7.4.0",
+    "pytest-benchmark>=4.0.0",
+    "pytest-cov>=4.1.0",
+]
+gpu = [
+    "faiss-gpu>=1.7.4",
+]
+dashboard = [
+    "streamlit>=1.28.0",
+    "plotly>=5.18.0",
+]
+# VectorForge — compressed vector database server
+vectordb = [
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "pydantic>=2.5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/umccodec/umc"
+Repository = "https://github.com/umccodec/umc"
+Documentation = "https://github.com/umccodec/umc#readme"
+
+[project.scripts]
+umc = "umc.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["umc*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "umc.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
