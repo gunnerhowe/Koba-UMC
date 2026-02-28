@@ -6,6 +6,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+cv2 = pytest.importorskip("cv2")
+
 from umc.data.video_loader import load_video, save_video, get_video_info
 
 

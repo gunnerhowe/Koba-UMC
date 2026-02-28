@@ -21,6 +21,14 @@ def sample_coordinates():
     return coords
 
 
+try:
+    import faiss
+    _HAS_FAISS = True
+except ImportError:
+    _HAS_FAISS = False
+
+
+@pytest.mark.skipif(not _HAS_FAISS, reason="faiss not installed")
 class TestManifoldSearch:
     def test_query_returns_correct_k(self, sample_coordinates):
         """Search returns exactly k neighbors."""
